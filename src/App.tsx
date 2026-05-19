@@ -26,6 +26,7 @@ import {
   X
 } from 'lucide-react';
 import { processTelemetry } from './lib/gemini';
+import { generatePulse, SystemPulse, fetchHLog, HLogEntry, parseManualLog, processNephilimVector } from './lib/paralegal';
 
 interface TelemetryState {
   raw: string;
@@ -40,58 +41,36 @@ interface TelemetryState {
 
 export default function App() {
   const [state, setState] = useState<TelemetryState>({
-    raw: `#!/bin/bash
-# ==========================================================
-# THE PARALEGAL: PROJECT SYNC & VERIFICATION (V.2026.05)
-# Target: Nephilim Vector Payload (May 14 Anchor)
-# ==========================================================
+    raw: `### [DEVTREE_AUDIT_LOG_2026.05.19]
+# BINDING: The Paralegal -> GitHub Controller
 
-# 1. DEFINE ORIGINS (Update these paths to your actual mount points)
-LOCAL_MASTER="/home/adrian/projects/emergence_core"
-CLOUD_SYNC_POINT="/home/adrian/cloud/backups/emergence"
-GH_REPO_DIR="/home/adrian/github/emergence"
-MANIFEST_FILE="$LOCAL_MASTER/logs/manifest_$(date +%Y%m%d).sha256"
+1. ENVIRONMENT_BASELINE: 
+   - Node: v22.22.2 (VALIDATED)
+   - NPM: 10.9.7 (VALIDATED)
 
-echo "[Paralegal] Initializing Pre-Flight Audit..."
+2. CORE_MODULES:
+   - @google/genai: INITIALIZED
+   - paralegal.js: ANCHORED
 
-# 2. GENERATE MASTER INTEGRITY SIGNATURE
-# Creates a checksum of all source material in the master directory.
-echo "[Paralegal] Calculating Master Checksums..."
-find "$LOCAL_MASTER" -type f -not -path '*/.*' -exec sha256sum {} + > "$MANIFEST_FILE"
+3. PENDING_VECTORS:
+   - Fetching H_Log for Telemetry Ingestion...
+   - Validating Nephilim Vector Payload...
 
-# 3. VERIFY LOCAL-TO-CLOUD PARITY
-# Ensures your cloud backups match the local 'Anti Gravity' origin.
-echo "[Paralegal] Verifying Cloud Parity..."
-rsync -avz --checksum --dry-run "$LOCAL_MASTER/" "$CLOUD_SYNC_POINT/" | grep -E '^deleting|[^/]$'
-
-# 4. GITHUB REPOSITORY ALIGNMENT
-# Checks if the GitHub 'archive' folder is out of sync with your local edits.
-echo "[Paralegal] Auditing Repository State..."
-cd "$GH_REPO_DIR" || exit
-git fetch origin
-STATUS=$(git status -uno)
-
-if [[ $STATUS == *"Your branch is up to date"* ]]; then
-    echo "[Paralegal] Repository is ALIGNED with origin."
-else
-    echo "[Paralegal] WARNING: Repository DRIFT detected. Manual push required."
-fi
-
-# 5. FINAL MANIFEST REPORT
-echo "[Paralegal] Audit Complete."
-echo "Master Manifest stored at: $MANIFEST_FILE"
-echo "Ready for May 14th Anchor."`,
+STATUS: Ready for Constitutional Anchor.`,
     auditOutput: '',
     isProcessing: false,
     status: 'IDLE',
-    phi: 'Φ: 0.98',
-    nodeVersion: 'v18.19.0',
-    bottlenecks: 'Lattice Divergence in CORE-01',
+    phi: 'Φ: 0.999',
+    nodeVersion: 'v22.22.2',
+    bottlenecks: 'NONE: Environment Synchronized',
     history: []
   });
 
   const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
   const [showBlueprint, setShowBlueprint] = useState(false);
+  const [pulse, setPulse] = useState<SystemPulse | null>(null);
+  const [hLogs, setHLogs] = useState<HLogEntry[]>([]);
+  const [isFetchingLogs, setIsFetchingLogs] = useState(false);
 
   useEffect(() => {
     let prevWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
@@ -105,12 +84,62 @@ echo "Ready for May 14th Anchor."`,
       prevWidth = currWidth;
     };
     window.addEventListener('resize', handleResize);
+    
+    const fetchPulse = async () => {
+      const p = await generatePulse();
+      setPulse(p);
+    };
+    fetchPulse();
+    
+    // Auto-fetch H-Logs if status is ready
+    if (state.raw.includes('Ready for Constitutional Anchor')) {
+      handleFetchHLog();
+    }
+
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const handleFetchHLog = async () => {
+    setIsFetchingLogs(true);
+    try {
+      const logs = await fetchHLog();
+      setHLogs(logs);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsFetchingLogs(false);
+    }
+  };
+
   const handleTransmit = async () => {
     if (!state.raw.trim()) return;
+
+    // Handle Manual H_Log Ingestion
+    if (state.raw.startsWith('LOG_INGEST:')) {
+      const logContent = state.raw.replace('LOG_INGEST:', '').trim();
+      const newLog = parseManualLog(logContent);
+      if (newLog) {
+        setHLogs(prev => [newLog, ...prev]);
+        setState(prev => ({ 
+          ...prev, 
+          status: 'IDLE', 
+          raw: '', 
+          auditOutput: `### SUCCESS: MANUAL_LOG_INGESTED\n\n**ID:** ${newLog.id}\n**Event:** ${newLog.event}\n**Origin:** ${newLog.origin}`
+        }));
+        return;
+      }
+    }
     
+    // Handle Nephilim Vector Payload
+    if (state.raw.includes('Nephilim Vector Payload')) {
+      const result = processNephilimVector(state.raw);
+      setState(prev => ({ 
+        ...prev, 
+        phi: `Φ: ${result.stability.toFixed(4)}`,
+        bottlenecks: result.status === 'STABLE' ? 'NONE: Environment Synchronized' : 'WARNING: ERRATIC_COEFFICIENTS_DETECTED'
+      }));
+    }
+
     setState(prev => ({ ...prev, isProcessing: true, status: 'PROCESSING' }));
     
     try {
@@ -184,18 +213,18 @@ echo "Ready for May 14th Anchor."`,
                     icon={<Terminal className="w-4 h-4" />} 
                     label="Node Runtime" 
                     value={state.nodeVersion}
-                    status="active"
+                    status="stable"
                   />
                   <StatusItem 
                     icon={<Activity className="w-4 h-4" />} 
                     label="Phi Stability" 
                     value={state.phi}
-                    status="stable"
+                    status="active"
                   />
                   <StatusItem 
                     icon={<ShieldCheck className="w-4 h-4" />} 
                     label="Compliance" 
-                    value="v1.2 Verified"
+                    value="v22 Verified"
                     status="active"
                   />
                 </div>
@@ -226,6 +255,49 @@ echo "Ready for May 14th Anchor."`,
                     <Map className="w-3.5 h-3.5 text-neutral-500" />
                     <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-tight">Geo_Vector_Map (Locked)</span>
                   </button>
+                </div>
+              </div>
+
+              <div className="px-6 mb-6">
+                <span className="data-grid-header block mb-2">Dependency Pulse</span>
+                <div className="space-y-1">
+                  {pulse?.dependencies.map((dep, idx) => (
+                    <div key={idx} className="flex items-center justify-between py-1 px-2 bg-neutral-900/30 rounded border border-neutral-800/50 mb-1">
+                      <span className="text-[10px] font-mono text-neutral-400">{dep.name}</span>
+                      <span className={`text-[9px] font-mono font-bold ${dep.status === 'ESTABLISHED' ? 'text-blue-500' : 'text-accent'}`}>{dep.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="px-6 mb-6">
+                <span className="data-grid-header block mb-2">H_Log Stream</span>
+                <div className="space-y-2">
+                  {hLogs.length === 0 ? (
+                    <button 
+                      onClick={handleFetchHLog}
+                      disabled={isFetchingLogs}
+                      className="w-full text-left py-2 px-3 border border-dashed border-neutral-800 rounded hover:bg-neutral-900 transition-colors"
+                    >
+                      <span className="text-[10px] font-mono text-neutral-500 uppercase">
+                        {isFetchingLogs ? 'Fetching...' : 'Initialize H_Log Fetch'}
+                      </span>
+                    </button>
+                  ) : (
+                    hLogs.map((log, idx) => (
+                      <div key={idx} className="p-2 bg-black/40 border border-neutral-800 rounded">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[8px] font-mono text-neutral-600">{log.id}</span>
+                          <span className={`text-[8px] font-mono px-1 rounded ${
+                            log.integrity === 'VERIFIED' ? 'bg-green-500/10 text-green-500' : 'bg-accent/10 text-accent'
+                          }`}>
+                            {log.integrity}
+                          </span>
+                        </div>
+                        <p className="text-[9px] font-mono text-neutral-300 leading-tight">{log.event}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -314,6 +386,9 @@ echo "Ready for May 14th Anchor."`,
             </div>
 
             <div className="flex-1 p-6 flex flex-col font-mono">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[9px] text-neutral-500 uppercase tracking-widest italic">Hint: Use 'LOG_INGEST: Event | Origin | VERIFIED' for manual H_Log injection</span>
+              </div>
               <textarea
                 value={state.raw}
                 onChange={(e) => setState(prev => ({ ...prev, raw: e.target.value }))}
